@@ -1,0 +1,23 @@
+Создается папка с проектом, в ней создается папка app,из папки с проектом
+    # cd app
+    # touch {config,app,main,views}.py
+    # pip3 install flask
+    # pip3 freeze
+
+Виртуальное окружение:
+    #sudo apt-get install python3-venv
+
+создать папку с проектом из нее 
+    # python3 -m venv venv
+    # . venv/bin/activate
+    # pip install flask-sqlalchemy
+    # pip install mysql-connector-python
+
+База данных: 
+    #sudo apt-get install mysql-server
+Если спросит пароль для базы то вызов создания новой : #mysql -u root -p
+Если нет, то #sudo mysql
+    #show databases;
+    #create database test1 character set utf8 collate utf8_unicode_ci;(создаст базу данных с кодировкой utf8 и регистронезависимым поиском
+    #show databases;
+    #exit;
