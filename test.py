@@ -8,13 +8,12 @@ def test_get():
 
     assert res.status_code == 200
     assert len(res.get_json()) == len(Video.query.all())
-    assert res.get_json()[0]['id'] == 1
+    assert res.get_json()[0]['id'] == 2
 
 
 def test_post():
     data = {
-        'id': 3,
-        'title': 'Video #3. Unit testing',
+        'name': 'Video #3. Unit testing',
         'description': 'Pytest'
     }
     res = client.post('/tutorials', json=data)

@@ -3,10 +3,13 @@ import sqlalchemy as db
 from  sqlalchemy.orm import sessionmaker, scoped_session
 from  sqlalchemy import create_engine
 from  sqlalchemy.ext.declarative import declarative_base
-
+from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
+from config import Config
 
 
 app = Flask(__name__)
+app.config.from_object(Config)
+
 client = app.test_client()
 
 engine = create_engine('sqlite:///db.sqlite')
@@ -16,6 +19,7 @@ session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=en
 Base = declarative_base()
 Base.query = session.query_property()
 
+jvt = JWTManager(app)
 
 from models import *
 
@@ -23,28 +27,16 @@ from models import *
 Base.metadata.create_all(bind=engine)
 
 
-
-
-tutorials = [
-    {
-        'id': 1,
-        'title': 'Video #1. Intro',
-        'description': 'GET, POST routes'
-        },
-        {
-        'id': 2,
-        'title': 'Video #2. More features',
-        'description': 'PUT, DELETE routes'
-        }
-]
-
 @app.route('/tutorials', methods=['GET'])
+@jwt_required
 def get_list():
-    videos = Video.query.all()
+    user_id = get_jwt_identity()
+    videos = Video.query.filter(Video.user_id == user_id)
     serialized = []
     for video in videos:
         serialized.append({
             'id': video.id,
+            'user_id': new_one.user_id,
             'name': video.name,
             'description': video.description
         })
@@ -52,12 +44,15 @@ def get_list():
 
 
 @app.route('/tutorials', methods=['POST'])
+@jwt_required
 def update_list():
-    new_one = Video(**request.json)
+    user_id = get_jwt_identity()
+    new_one = Video(user_id=user_id, **request.json)
     session.add(new_one)
     session.commit()
     serialized = ({
             'id': new_one.id,
+            'user_id': new_one.user_id,
             'name': new_one.name,
             'description': new_one.description
         })
@@ -65,8 +60,10 @@ def update_list():
 
 
 @app.route('/tutorials/<int:tutorial_id>', methods=['PUT'])
+@jwt_required
 def update_tutorial(tutorial_id):
-    item = Video.query.filter(Video.id == tutorial_id).first()
+    user_id = get_jwt_identity()
+    item = Video.query.filter(Video.id == tutorial_id, Video.user_id == user_id).first()
     params = request.json
     if not item:
         return {'massage': 'No tutorials with this id'}, 400
@@ -75,24 +72,42 @@ def update_tutorial(tutorial_id):
         session.commit()
     serialized = ({
             'id': item.id,
+            'user_id': new_one.user_id,
             'name': item.name,
             'description': item.description
         })
     return jsonify(serialized)
 
 
-
-
 @app.route('/tutorials/<int:tutorial_id>', methods=['DELETE'])
+@jwt_required
 def delete_tutorial(tutorial_id):
-    item = Video.query.filter(Video.id == tutorial_id).first()
+    user_id = get_jwt_identity()
+    item = Video.query.filter(Video.id == tutorial_id, Video.user_id == user_id).first()
     if not item:
         return {'massage': 'No tutorials with this id'}, 400
     session.delete(item)
     session.commit()
-
-    tutorials.pop(idx)
     return '', 204
+
+
+@app.route('/register', methods=['POST'])
+def register():
+    params = request.json
+    user = User(**params)
+    session.add(user)
+    session.commit()
+    token = user.get_token()
+    return {'access_token': token}
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    params = request.json
+    user = User.authenticate(**params)
+    token = user.get_token()
+    return {'access_token': token}
+
 
 
 @app.teardown_appcontext
