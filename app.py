@@ -8,7 +8,7 @@ from config import Config
 from apispec.ext.marshmallow import MarshmallowPlugin
 from apispec import  APISpec
 from flask_apispec.extension import FlaskApiSpec
-from schemas import VideoSchema
+from schemas import VideoSchema, UserSchema, AuthScheme
 from flask_apispec import use_kwargs, marshal_with
 
 
@@ -30,6 +30,7 @@ jvt = JWTManager(app)
 
 docs = FlaskApiSpec()
 docs.init_app(app)
+
 app.config.update({
     'APISPEC_SPEC': APISpec(
         title='videoblog',
@@ -96,9 +97,10 @@ def delete_tutorial(tutorial_id):
 
 
 @app.route('/register', methods=['POST'])
-def register():
-    params = request.json
-    user = User(**params)
+@use_kwargs(UserSchema)
+@marshal_with(AuthScheme)
+def register(**kwargs):
+    user = User(**kwargs)
     session.add(user)
     session.commit()
     token = user.get_token()
@@ -106,9 +108,10 @@ def register():
 
 
 @app.route('/login', methods=['POST'])
-def login():
-    params = request.json
-    user = User.authenticate(**params)
+@use_kwargs(UserSchema(only=('email', 'password')))
+@marshal_with(AuthScheme)
+def login(**kwargs):
+    user = User.authenticate(**kwargs)
     token = user.get_token()
     return {'access_token': token}
 
@@ -118,7 +121,12 @@ def login():
 def shutdoun_session(exception=None):
     session.remove()
 
-
+docs.register(get_list)
+docs.register(update_list)
+docs.register(update_tutorial)
+docs.register(delete_tutorial)
+docs.register(register)
+docs.register(login)
 
 
 if __name__ == '__main__':
