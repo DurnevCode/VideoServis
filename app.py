@@ -10,8 +10,7 @@ from apispec import  APISpec
 from flask_apispec.extension import FlaskApiSpec
 from schemas import VideoSchema, UserSchema, AuthScheme
 from flask_apispec import use_kwargs, marshal_with
-
-
+import logging
 
 
 app = Flask(__name__)
@@ -42,16 +41,33 @@ app.config.update({
 })
 from models import *
 
-
 Base.metadata.create_all(bind=engine)
+
+def setup_logger():
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+
+    formatter = logging.Formatter('%(asctime)s:%(name)s:%(levelname)s:%(message)s')
+    file_handler = logging.FileHandler('log/api.log')
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+
+    return logger
+logger = setup_logger()
+
 
 
 @app.route('/tutorials', methods=['GET'])
 @jwt_required
 @marshal_with(VideoSchema(many=True))
 def get_list():
-    user_id = get_jwt_identity()
-    videos = Video.query.filter(Video.user_id == user_id)
+    try:
+        user_id = get_jwt_identity()
+        videos = Video.query.filter(Video.user_id == user_id)
+    except Exception as e:
+        logger.warning(f'user:{user_id} tutorials - read action failed with errors: {'e'}')
+        return {'message': str(e)}, 400
     return videos
 
 
@@ -60,10 +76,14 @@ def get_list():
 @use_kwargs(VideoSchema)
 @marshal_with(VideoSchema)
 def update_list(**kwargs):
-    user_id = get_jwt_identity()
-    new_one = Video(user_id=user_id, **kwargs)
-    session.add(new_one)
-    session.commit()
+    try:
+        user_id = get_jwt_identity()
+        new_one = Video(user_id=user_id, **kwargs)
+        session.add(new_one)
+        session.commit()
+    except Exception as e:
+        logger.warning(f'user:{user_id} tutorials - create action failed with errors: {e}')
+        return {'message': str(e)}, 400
     return new_one
 
 
@@ -72,14 +92,18 @@ def update_list(**kwargs):
 @use_kwargs(VideoSchema)
 @marshal_with(VideoSchema)
 def update_tutorial(tutorial_id, **kwargs):
-    user_id = get_jwt_identity()
-    item = Video.query.filter(Video.id == tutorial_id, Video.user_id == user_id).first()
-    params = request.json
-    if not item:
-        return {'massage': 'No tutorials with this id'}, 400
-    for key, value in kwargs.items():
-        setattr(item, key, value)
-    session.commit()
+    try:
+        user_id = get_jwt_identity()
+        item = Video.query.filter(Video.id == tutorial_id, Video.user_id == user_id).first()
+        params = request.json
+        if not item:
+            return {'massage': 'No tutorials with this id'}, 400
+        for key, value in kwargs.items():
+            setattr(item, key, value)
+        session.commit()
+    except Exception as e:
+        logger.warning(f'user:{user_id} tutorial:{tutorial_id} - update action failed with errors: {e}')
+        return {'message': str(e)}, 400
     return item
 
 
@@ -87,12 +111,16 @@ def update_tutorial(tutorial_id, **kwargs):
 @jwt_required
 @marshal_with(VideoSchema)
 def delete_tutorial(tutorial_id):
-    user_id = get_jwt_identity()
-    item = Video.query.filter(Video.id == tutorial_id, Video.user_id == user_id).first()
-    if not item:
-        return {'massage': 'No tutorials with this id'}, 400
-    session.delete(item)
-    session.commit()
+    try:
+        user_id = get_jwt_identity()
+        item = Video.query.filter(Video.id == tutorial_id, Video.user_id == user_id).first()
+        if not item:
+            return {'massage': 'No tutorials with this id'}, 400
+        session.delete(item)
+        session.commit()
+    except Exception as e:
+        logger.warning(f'user:{user_id} tutorial:{tutorial_id} - delete action failed with errors: {e}')
+        return {'message': str(e)}, 400
     return '', 204
 
 
@@ -100,10 +128,14 @@ def delete_tutorial(tutorial_id):
 @use_kwargs(UserSchema)
 @marshal_with(AuthScheme)
 def register(**kwargs):
-    user = User(**kwargs)
-    session.add(user)
-    session.commit()
-    token = user.get_token()
+    try:
+        user = User(**kwargs)
+        session.add(user)
+        session.commit()
+        token = user.get_token()
+    except Exception as e:
+        logger.warning(f'registration failed with errors: {e}')
+        return {'message': str(e)}, 400
     return {'access_token': token}
 
 
@@ -111,8 +143,12 @@ def register(**kwargs):
 @use_kwargs(UserSchema(only=('email', 'password')))
 @marshal_with(AuthScheme)
 def login(**kwargs):
-    user = User.authenticate(**kwargs)
-    token = user.get_token()
+    try:
+        user = User.authenticate(**kwargs)
+        token = user.get_token()
+    except Exception as e:
+         logger.warning(f'login with email {kwargs["email"]} failed with errors: {e}')
+        return {'message': str(e)}, 400
     return {'access_token': token}
 
 
@@ -120,6 +156,18 @@ def login(**kwargs):
 @app.teardown_appcontext
 def shutdoun_session(exception=None):
     session.remove()
+
+@app.errorhandler(422)
+def error_handlers(err):
+    headers = err.data.get('headers', None)
+    messages = err.data.get('messages', ['Invalid request'])
+    logger.warning(f'Invalid input params {messages}')
+    if headers:
+        return jsonify({'message': messages}), 400, headers
+    else:
+        return jsonify({'message': messages}), 400
+
+
 
 docs.register(get_list)
 docs.register(update_list)
