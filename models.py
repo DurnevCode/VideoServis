@@ -11,7 +11,53 @@ class Video(Base):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     name = db.Column(db.String(250), nullable=False)
     description = db.Column(db.String(500), nullable=False)
+    
+    @classmethod
+    def get_user_list(cls, user_id):
+        try:
+            videos = cls.query.filter(cls.user_id == user_id).all()
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        return videos
+    
+    
+    def  save(self):
+        try:
+            session.add(self)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        
+    
+    def get(cls, tutorial_id, user_id):
+        try:
+            video = cls.query.filter(cls.id == tutorial_id, cls.user_id == user_id).first()
+            if not video:
+                raise Exception('No tutorials with this id')
+        except Exception:
+            session.rollback()
+            raise
 
+
+    def update(self, **kwargs):
+        try:
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+                session.commit()
+        except Exception:
+            session.rollback()
+            raise
+
+    def delete(self):
+        try:
+            session.delete(self)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise    
 
 class User(Base):
     __tablename__= 'users'
