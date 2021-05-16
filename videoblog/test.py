@@ -26,7 +26,8 @@ def test_put():
     
     assert res.status_code == 200
     assert Video.query.get(1).name == 'UPD'
-
+from . import client
+from  models import Video
 
 def test_delete():
     res = client.delete('/tutorials/1')
